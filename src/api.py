@@ -2,9 +2,16 @@ from datetime import date
 import os
 import mlflow
 import pandas as pd
-from fastapi import FastAPI
 from pydantic import BaseModel, Field
+from time import perf_counter
+from fastapi import FastAPI, Response
 
+from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    Counter,
+    Histogram,
+    generate_latest,
+)
 
 TRACKING_URI = "sqlite:///mlflow.db"
 MODEL_NAME = "restaurant-sales-forecaster"
@@ -22,7 +29,28 @@ FEATURES = [
     "month",
     "day_of_year",
 ]
+REQUEST_COUNT = Counter(
+    "api_requests_total",
+    "Total number of API requests",
+    ["method", "endpoint", "status"],
+)
 
+REQUEST_LATENCY = Histogram(
+    "api_request_duration_seconds",
+    "API request duration in seconds",
+    ["endpoint"],
+)
+
+PREDICTION_COUNT = Counter(
+    "sales_predictions_total",
+    "Total number of sales predictions",
+)
+
+PREDICTED_SALES = Histogram(
+    "predicted_sales_dollars",
+    "Distribution of predicted restaurant sales",
+    buckets=[1000, 1500, 2000, 2500, 3000, 4000, 5000],
+)
 
 class SalesPredictionRequest(BaseModel):
     prediction_date: date
@@ -37,7 +65,9 @@ class SalesPredictionResponse(BaseModel):
     model_alias: str
 
 
-mlflow.set_tracking_uri(TRACKING_URI)
+if MODEL_URI.startswith("models:/"):
+    mlflow.set_tracking_uri(TRACKING_URI)
+
 model = mlflow.pyfunc.load_model(MODEL_URI)
 
 app = FastAPI(
@@ -46,6 +76,40 @@ app = FastAPI(
     version="1.0.0",
 )
 
+@app.get("/")
+def root() -> dict:
+    return {
+        "message": "Restaurant Sales Prediction API",
+        "documentation": "/docs",
+        "health": "/health",
+        "metrics": "/metrics",
+    }
+
+@app.middleware("http")
+async def monitor_requests(request, call_next):
+    start_time = perf_counter()
+    response = await call_next(request)
+
+    duration = perf_counter() - start_time
+
+    REQUEST_COUNT.labels(
+        method=request.method,
+        endpoint=request.url.path,
+        status=response.status_code,
+    ).inc()
+
+    REQUEST_LATENCY.labels(
+        endpoint=request.url.path,
+    ).observe(duration)
+
+    return response
+
+@app.get("/metrics", include_in_schema=False)
+def metrics() -> Response:
+    return Response(
+        content=generate_latest(),
+        media_type=CONTENT_TYPE_LATEST,
+    )
 
 @app.get("/health")
 def health() -> dict:
@@ -81,6 +145,9 @@ def predict_sales(
 
     prediction = model.predict(model_input)
     predicted_sales = max(0.0, float(prediction[0]))
+
+    PREDICTION_COUNT.inc()
+    PREDICTED_SALES.observe(predicted_sales)
 
     return SalesPredictionResponse(
         prediction_date=prediction_date,
