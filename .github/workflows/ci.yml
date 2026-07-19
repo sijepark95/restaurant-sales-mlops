@@ -34,6 +34,9 @@ jobs:
       - name: Validate data
         run: python src/validate_data.py
 
+      - name: Enforce model quality gate
+        run: python src/quality_gate.py
+
       - name: Run tests
         run: python -m pytest -v
 
