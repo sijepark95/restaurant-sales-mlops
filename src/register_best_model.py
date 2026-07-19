@@ -18,7 +18,8 @@ def main() -> None:
 
     runs = mlflow.search_runs(
         experiment_ids=[experiment.experiment_id],
-        order_by=["metrics.mae ASC"],
+        filter_string="params.model_type = 'linear-regression'",
+        order_by=["attributes.start_time DESC"],
         max_results=1,
     )
 
