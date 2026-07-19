@@ -1,0 +1,11 @@
+.venv
+.venv-py314
+.git
+.pytest_cache
+__pycache__
+*.pyc
+mlruns
+mlartifacts
+notebooks
+data
+tests

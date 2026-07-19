@@ -1,0 +1,41 @@
+name: MLOps CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+
+    env:
+      MODEL_URI: models/champion
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Generate sample data
+        run: python src/generate_data.py
+
+      - name: Validate data
+        run: python src/validate_data.py
+
+      - name: Run tests
+        run: python -m pytest -v
+
+      - name: Build Docker image
+        run: docker build -t restaurant-sales-api:${{ github.sha }} .

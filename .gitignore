@@ -1,0 +1,23 @@
+# Python environments
+.venv/
+.venv-py314/
+
+# Python cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local MLflow state
+mlflow.db
+mlruns/
+mlartifacts/
+
+# Generated files
+data/raw/*.csv
+data/processed/*
+models/*.joblib
+models/metrics.json
+
+# Editor and OS
+.vscode/
+.DS_Store
