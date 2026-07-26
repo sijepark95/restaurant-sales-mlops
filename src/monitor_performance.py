@@ -115,7 +115,7 @@ def main() -> None:
             f"PERFORMANCE ALERT: MAE ${mae:,.2f} exceeds "
             f"${MAX_PRODUCTION_MAE:,.2f}"
         )
-        sys.exit(1)
+        sys.exit(10)
 
     print("MODEL PERFORMANCE ACCEPTABLE")
 

@@ -109,7 +109,7 @@ def main() -> None:
 
     if drifted_features:
         print("DRIFT DETECTED: " + ", ".join(drifted_features))
-        sys.exit(1)
+        sys.exit(10)
 
     print("NO SIGNIFICANT DRIFT DETECTED")
 

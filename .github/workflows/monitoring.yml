@@ -1,0 +1,75 @@
+name: Production Model Monitoring
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Runs every day at 13:00 UTC
+    - cron: "0 13 * * *"
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+
+    env:
+      MODEL_URI: models/champion
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Generate simulated production data
+        run: python src/generate_production_data.py
+
+      - name: Evaluate retraining decision
+        id: evaluation
+        shell: bash
+        run: |
+          set +e
+          python src/evaluate_retraining.py
+          exit_code=$?
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+
+          if [ "$exit_code" -eq 0 ]; then
+            echo "Monitoring completed with no performance alert."
+            exit 0
+          fi
+
+          if [ "$exit_code" -eq 10 ]; then
+            echo "::warning::Drift or model-performance alert detected."
+            exit 0
+          fi
+
+          echo "::error::Monitoring pipeline failed with exit code $exit_code."
+          exit "$exit_code"
+
+      - name: Add monitoring summary
+        shell: bash
+        run: |
+          echo "## Production Monitoring Result" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Exit code: \`${{ steps.evaluation.outputs.exit_code }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${{ steps.evaluation.outputs.exit_code }}" = "10" ]; then
+            echo "⚠️ Drift or degraded performance was detected." >> "$GITHUB_STEP_SUMMARY"
+            echo "Review the data before approving retraining." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "✅ No monitoring alert was detected." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload performance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-performance-report
+          path: reports/production_performance.csv
+          if-no-files-found: warn
